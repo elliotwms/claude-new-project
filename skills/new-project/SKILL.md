@@ -11,7 +11,11 @@ Nothing about any one user's setup is hard-coded here. Personal choices live in 
 
 ## The pattern
 
-This skill is usually run by the **hub**: a Claude Code Remote Control server in `projects_dir`, in its own tmux session (`hub_session`, default `hub`). The user opens the hub from their phone or browser to create projects and to start or stop project servers. Each project gets its own Remote Control server in a tmux session named after the project, and each session the user opens there gets its own git worktree. The hub doesn't direct project work; the user talks to each project's sessions directly. The `hub-service` skill keeps the hub running across crashes and reboots.
+This skill is usually run by the **hub**: a Claude Code Remote Control server in `projects_dir`, in its own tmux session (`hub_session`, default `hub`). The user opens the hub from their phone or browser to create projects and to start or stop project servers. Each project gets its own Remote Control server in a tmux session named after the project, and each session the user opens there gets its own git worktree. The hub doesn't direct project work; the user talks to each project's sessions directly.
+
+Why a server per project: the Claude app lists each machine running `claude remote-control` as a device card, and when the user starts a session from it, the folder picker offers only the folders where a server is running. A project appears there, with its branch, once its server is up, and `--spawn worktree` gives each of its sessions its own worktree.
+
+The hub needs something to keep it running. The `hub-service` skill does this on macOS with launchd; any process supervisor that keeps `claude remote-control` running in `projects_dir` inside a tmux session named `hub_session` works the same way, and this skill doesn't depend on which one is used. Tools that keep an interactive `claude --remote-control` session alive (one conversation) aren't a substitute: the hub has to run in server mode for the device card and folder picker.
 
 ```
                You: Claude app or claude.ai/code
@@ -28,7 +32,7 @@ This skill is usually run by the **hub**: a Claude Code Remote Control server in
  └──────────▲───────────────┘        │   └─ session 2 → worktree b   │
             │ restarts if it dies    └───────────────────────────────┘
  ┌──────────┴───────────────┐        ┌───────────────────────────────┐
- │ launchd (hub-service)    │        │ Project server: bar  …        │
+ │ supervisor (hub-service) │        │ Project server: bar  …        │
  └──────────────────────────┘        └───────────────────────────────┘
 ```
 

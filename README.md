@@ -3,7 +3,7 @@
 A Claude Code plugin for running all your projects from your phone, on an always-on machine such as a Mac mini. It has two skills:
 
 - **`new-project`**: ask for a new project and Claude creates the folder, scaffolds it, makes a git repo, optionally creates a GitHub repo set up like one you already have, and starts a [Remote Control](https://code.claude.com/docs/en/remote-control) server for it in tmux, with each session in its own git worktree.
-- **`hub-service`**: installs a launchd agent that keeps the hub (below) running through crashes, network drops and reboots.
+- **`hub-service`** (optional, macOS): installs a launchd agent that keeps the hub (below) running through crashes, network drops and reboots.
 
 ## The pattern
 
@@ -76,7 +76,15 @@ The `hub-service` skill installs a launchd agent (`local.claude-hub`) that check
 
 For the hub to come back after a reboot, the machine needs automatic login (not available with FileVault on), because launchd agents start at login. The skill checks this and sleep settings, and tells you what to change.
 
-The `hub-service` skill is macOS only. On Linux, the same start script works from a systemd user timer.
+The `hub-service` skill is macOS only. On Linux, the same start script works from a systemd user timer. Any other supervisor works too: `new-project` only needs `claude remote-control` running in your projects folder, in a tmux session named after `hub_session`.
+
+### Why a server per project
+
+In the Claude app, each machine running `claude remote-control` appears as a device card, and starting a session from it offers only the folders where a server is running. So the hub's folder is always there, and each project shows up once its own server is running, with `--spawn worktree` giving every session its own worktree.
+
+### Want one always-on conversation instead?
+
+If you'd rather keep a single long-running conversation alive, resumed after every restart, look at [waterbear](https://github.com/royashbrook/waterbear). It runs an interactive `claude --remote-control` session, so it doesn't give you the device card or new sessions from your phone, but it's well suited to an always-on assistant.
 
 ## Use
 

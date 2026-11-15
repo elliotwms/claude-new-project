@@ -1,7 +1,7 @@
 {
   "name": "new-project",
   "description": "Create projects with their git and GitHub repos and a Remote Control server each, managed from a central hub session that launchd keeps alive",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "elliotwms"
   },

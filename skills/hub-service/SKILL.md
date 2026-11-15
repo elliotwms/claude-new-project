@@ -34,6 +34,14 @@ Values are written into the script when it's installed. To change them later, up
    DIR="<projects_dir>"
 
    tmux has-session -t "=$SESSION" 2>/dev/null && exit 0
+
+   # Don't start into a dead network: Remote Control registers when it starts, and a server that
+   # can't reach Anthropic exits after about ten minutes anyway. The next run, a minute later, retries.
+   if ! curl -s -o /dev/null --max-time 5 https://api.anthropic.com; then
+     echo "$(date -u +%FT%TZ) offline, not starting $SESSION"
+     exit 0
+   fi
+
    tmux new-session -d -s "$SESSION" -c "$DIR" \
      "claude remote-control --name '$SESSION' --spawn same-dir"
    echo "$(date -u +%FT%TZ) started $SESSION in $DIR"
@@ -55,6 +63,7 @@ Values are written into the script when it's installed. To change them later, up
      <key>RunAtLoad</key><true/>
      <key>StartInterval</key><integer>60</integer>
      <key>AbandonProcessGroup</key><true/>
+     <key>ProcessType</key><string>Interactive</string>
      <key>LimitLoadToSessionType</key><string>Aqua</string>
      <key>StandardOutPath</key><string>/Users/<user>/Library/Logs/claude-hub.log</string>
      <key>StandardErrorPath</key><string>/Users/<user>/Library/Logs/claude-hub.log</string>
@@ -62,6 +71,7 @@ Values are written into the script when it's installed. To change them later, up
    </plist>
    ```
    - `AbandonProcessGroup` stops launchd from killing the tmux server when the script exits.
+   - `ProcessType Interactive` stops macOS from throttling the hub while nobody is using the Mac. Without it, Remote Control sessions started under launchd have been reported to freeze at their first tool call until someone touches the keyboard or mouse, which is exactly when the user is away.
    - `LimitLoadToSessionType Aqua` runs it in the logged-in GUI session, where Claude Code can read its sign-in from the login keychain.
 
    Check it with `plutil -lint`.
@@ -88,6 +98,8 @@ Values are written into the script when it's installed. To change them later, up
 - Agent status: `launchctl print gui/$(id -u)/local.claude-hub`
 - Log: `tail -n 20 ~/Library/Logs/claude-hub.log` (a line per start, plus any errors)
 - Hub: `tmux capture-pane -pt <hub_session>`
+
+If the log shows `offline, not starting` lines, the machine couldn't reach `api.anthropic.com`; the hub starts on the first run after the network returns.
 
 If the log shows repeated starts a minute apart, the hub is exiting straight away. Attach with `tmux attach -t <hub_session>` or run the `claude remote-control` command by hand in `projects_dir` to see why. A sign-in error usually means the tmux server was started from an SSH login, which can't read the keychain; stop it with `tmux kill-server` (this stops every tmux session, so ask first) and let the agent start it again.
 
