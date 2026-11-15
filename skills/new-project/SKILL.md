@@ -5,7 +5,7 @@ description: Create a new project with a local git repo, optionally a GitHub rep
 
 # New project
 
-Creates a project folder, scaffolds it, commits it, optionally creates a GitHub repo for it, and starts a Claude Code Remote Control server for it in a detached tmux session, so the user can open worktree-isolated sessions for it from claude.ai/code or the Claude app.
+Creates a project folder, writes a brief for it (or a full scaffold, if configured), commits it, optionally creates a GitHub repo for it, and starts a Claude Code Remote Control server for it in a detached tmux session, so the user can open worktree-isolated sessions for it from claude.ai/code or the Claude app.
 
 Nothing about any one user's setup is hard-coded here. Personal choices live in a config file (below).
 
@@ -36,7 +36,7 @@ The hub needs something to keep it running. The `hub-service` skill does this on
  └──────────────────────────┘        └───────────────────────────────┘
 ```
 
-When this skill runs inside the hub, never stop or restart the hub's own tmux session: the skill is running inside it.
+When this skill runs inside the hub, never stop or restart the hub's own tmux session: the skill is running inside it. If the user asks to stop the hub, use `claude-hub stop` (see the `hub-service` skill), which allows for this.
 
 ## Config
 
@@ -53,7 +53,8 @@ Read `~/.config/new-project/config.json` if it exists. Every key is optional:
   "managed_by": "",
   "spawn": "worktree",
   "permission_mode": "acceptEdits",
-  "hub_session": "hub"
+  "hub_session": "hub",
+  "scaffold": "brief"
 }
 ```
 
@@ -61,11 +62,12 @@ Read `~/.config/new-project/config.json` if it exists. Every key is optional:
 - `github`: `ask` (default), `always` or `never`.
 - `github_owner`: user or org that owns new repos. Default: the account `gh` is logged in as.
 - `visibility`: `private` (default) or `public`. The user's request overrides it.
-- `template_repo`: `owner/repo` of a GitHub template repo to create new repos from. Its files replace the scaffold's shared files (workflows, issue templates, etc.).
+- `template_repo`: `owner/repo` of a GitHub template repo to create new repos from. Its files (workflows, issue templates, etc.) are the project's starting point.
 - `settings_from`: `owner/repo` of a reference repo whose GitHub settings, rulesets and labels new repos copy. Templates copy files, never settings, so this is how settings are kept consistent.
 - `managed_by`: `owner/repo` of an infrastructure-as-code repo (Terraform or similar) that manages the user's GitHub repos. When set, the skill doesn't create or configure the GitHub repo itself; it opens a PR there instead (step 4b).
 - `spawn`, `permission_mode`: passed to `claude remote-control` for project servers.
 - `hub_session`: tmux session name of the hub. Default `hub`. No project may use this name.
+- `scaffold`: how much of the project to set up before handing over. `brief` (default) writes the user's description into the project and stops, so design and development start in the project's own sessions. `full` also scaffolds the app for its stack and builds it once. The user's request overrides it ("and scaffold it", "just the repo").
 
 If the file doesn't exist, use the defaults and mention once in the report that the user can create it to set these.
 
@@ -81,13 +83,19 @@ If any of these are missing, ask for all of them in one short question before st
 
 1. **Check the name is free.** If the name equals `hub_session`, ask for another. If `<projects_dir>/<name>` exists, or `tmux has-session -t <name>` succeeds, stop and ask whether to reuse it or pick another name. If GitHub is wanted, also run `gh repo view <owner>/<name>`; if it exists, stop and ask.
 
-2. **Check prerequisites.** `tmux` and `claude` must be on PATH. If GitHub is wanted, `gh auth status` must succeed; if it doesn't, carry on without GitHub and say in the report that `gh auth login` fixes it. For an iOS project, `xcodebuild -version` must succeed; if it doesn't, stop and say Xcode is needed.
+2. **Check prerequisites.** `tmux` and `claude` must be on PATH. If GitHub is wanted, `gh auth status` must succeed; if it doesn't, carry on without GitHub and say in the report that `gh auth login` fixes it. With `scaffold: full` for an iOS project, `xcodebuild -version` must succeed; if it doesn't, stop and say Xcode is needed.
 
 3. **Create the project.**
-   - With a `template_repo` and GitHub wanted (and no `managed_by`): `gh repo create <owner>/<name> --<visibility> --template <template_repo> --clone` from inside `projects_dir`, then add the stack scaffold on top.
+   - With a `template_repo` and GitHub wanted (and no `managed_by`): `gh repo create <owner>/<name> --<visibility> --template <template_repo> --clone` from inside `projects_dir`.
    - Otherwise: create `<projects_dir>/<name>` and `git init -b main`.
 
-   Scaffold for the stack, keeping it minimal and conventional for that ecosystem, with a `.gitignore` for it and a project `CLAUDE.md` listing the exact build, test and run commands. For an iOS app, prefer a generated project (XcodeGen `project.yml`, with the `.xcodeproj` gitignored) over a committed `.xcodeproj`, SwiftUI, and a local Swift package for logic with tests; confirm it builds for the simulator. If the project has a build, run it once and note whether it passed.
+   Then, depending on `scaffold`:
+
+   - **`brief`** (default): don't write any app code or choose its structure; that work belongs to the project's own sessions. Write:
+     - `CLAUDE.md` with a `## Brief` section holding the user's description of the project in their own words (lightly tidied, nothing invented), the stack if they named one, and a line saying nothing has been built yet, so the first session should start by planning with the user. Keep anything that came from a template.
+     - `README.md` with the project name and a one-line description, unless a template provided one.
+     - A `.gitignore` for the stack if the user named one.
+   - **`full`**: as `brief`, then scaffold for the stack, keeping it minimal and conventional for that ecosystem, and add the exact build, test and run commands to `CLAUDE.md`. For an iOS app, prefer a generated project (XcodeGen `project.yml`, with the `.xcodeproj` gitignored) over a committed `.xcodeproj`, SwiftUI, and a local Swift package for logic with tests; confirm it builds for the simulator. If the project has a build, run it once and note whether it passed.
 
    Commit. Worktree mode needs at least one commit, so this must happen before step 5.
 
@@ -112,7 +120,7 @@ If any of these are missing, ask for all of them in one short question before st
 
 6. **Answer first-run prompts.** Wait about 5 seconds, then read the pane with `tmux capture-pane -pt <name>`. If it shows `Trust <dir>? [y/N]` or `Enable Remote Control? (y/n)`, send `tmux send-keys -t <name> y Enter` and check again. If it shows `Spawn mode for this project:`, send `2` then Enter for worktree, or `1` for same-dir, to match `spawn`. Repeat until the pane shows the server waiting for connections, or an error.
 
-7. **Report back** in a few lines: the project path; the GitHub repo URL, or the infra PR URL, or that GitHub was skipped and why; which reference settings applied and which didn't; whether the build passed; and the session name to look for in the Claude app. If the server failed, include the error text from the pane.
+7. **Report back** in a few lines: the project path; the GitHub repo URL, or the infra PR URL, or that GitHub was skipped and why; which reference settings applied and which didn't; with `scaffold: full`, whether the build passed; and that the project's folder now appears in the Claude app when starting a session from this machine's device card, which is where to start designing and building it. If the server failed, include the error text from the pane.
 
 ## Managing servers
 

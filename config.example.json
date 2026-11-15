@@ -8,5 +8,6 @@
   "managed_by": "",
   "spawn": "worktree",
   "permission_mode": "acceptEdits",
-  "hub_session": "hub"
+  "hub_session": "hub",
+  "scaffold": "brief"
 }

@@ -2,8 +2,8 @@
 
 A Claude Code plugin for running all your projects from your phone, on an always-on machine such as a Mac mini. It has two skills:
 
-- **`new-project`**: ask for a new project and Claude creates the folder, scaffolds it, makes a git repo, optionally creates a GitHub repo set up like one you already have, and starts a [Remote Control](https://code.claude.com/docs/en/remote-control) server for it in tmux, with each session in its own git worktree.
-- **`hub-service`** (optional, macOS): installs a launchd agent that keeps the hub (below) running through crashes, network drops and reboots.
+- **`new-project`**: ask for a new project and Claude creates the folder, writes your brief into it, makes a git repo, optionally creates a GitHub repo set up like one you already have, and starts a [Remote Control](https://code.claude.com/docs/en/remote-control) server for it in tmux, with each session in its own git worktree.
+- **`hub-service`** (optional, macOS): installs a `claude-hub` command to start and stop the hub (below), and a launchd agent that keeps it running through crashes, network drops and reboots.
 
 ## The pattern
 
@@ -72,7 +72,7 @@ cd ~/projects && claude --rc "hub"
 
 > Set up the hub service.
 
-The `hub-service` skill installs a launchd agent (`local.claude-hub`) that checks every minute whether the hub's tmux session is running and starts it if not. Once it's installed you can close that first session: the agent starts the hub in tmux, and from then on you reach it from the Claude app.
+The `hub-service` skill installs a `claude-hub` command and a launchd agent (`local.claude-hub`) that runs `claude-hub ensure` every minute, starting the hub's tmux session if it isn't running and you haven't stopped it. Once it's installed you can close that first session: the agent starts the hub in tmux, and from then on you reach it from the Claude app.
 
 For the hub to come back after a reboot, the machine needs automatic login (not available with FileVault on), because launchd agents start at login. The skill checks this and sleep settings, and tells you what to change.
 
@@ -94,6 +94,8 @@ Open the hub and ask in plain words, for example:
 
 Or run the skill directly with `/new-project:new-project tide-times`. If you leave out the name, the kind of project or whether you want GitHub, Claude asks once before starting.
 
+By default the hub stops at the setup: it writes your description into the project's `CLAUDE.md` as a brief, commits it and starts the project's server, without writing any app code. Open the project from the device card and start designing it there. Set `"scaffold": "full"` to have the hub also scaffold and build the app, or ask for it in the request.
+
 ## Configure
 
 Copy `config.example.json` to `~/.config/new-project/config.json` and edit it. Every key is optional; without the file the defaults apply.
@@ -110,6 +112,7 @@ Copy `config.example.json` to `~/.config/new-project/config.json` and edit it. E
 | `spawn` | `worktree` | Remote Control spawn mode: `worktree` or `same-dir` |
 | `permission_mode` | `acceptEdits` | Starting permission mode for remote sessions |
 | `hub_session` | `hub` | tmux session name for the hub; no project can use it |
+| `scaffold` | `brief` | `brief`: write the brief and stop; `full`: also scaffold and build the app |
 
 ### Keeping repos consistent
 
@@ -123,14 +126,27 @@ Rulesets on private repos owned by a personal account need GitHub Pro. On the fr
 
 If you manage GitHub repos with Terraform, set `managed_by` instead. The skill then opens a PR in that repo, following the pattern it already uses, and leaves applying it to you. It never runs `terraform apply`.
 
+## Starting and stopping the hub
+
+With `hub-service` installed:
+
+```bash
+claude-hub status        # is the hub running, and which project servers are
+claude-hub stop          # stop the hub and keep it stopped, even after a reboot
+claude-hub stop --all    # also stop every project server
+claude-hub start         # start it again
+```
+
+You can also ask the hub to stop itself from your phone. It goes offline about ten seconds later, and can then only be started again from the Mac or over SSH with `claude-hub start`.
+
 ## Managing servers
 
 The hub and each project's server run in tmux sessions: `hub`, and one named after each project.
 
 - `tmux ls` lists them
 - `tmux attach -t <name>` shows one (detach with Ctrl-b, then d)
-- `tmux kill-session -t <name>` stops one; the launchd agent restarts the hub within a minute
-- `tail ~/Library/Logs/claude-hub.log` shows when the agent last started the hub
+- `tmux kill-session -t <name>` stops a project server (use `claude-hub stop` for the hub, or the agent restarts it within a minute)
+- `tail ~/Library/Logs/claude-hub.log` shows when the hub was started and stopped
 
 The agent only looks after the hub. Project servers stop if the machine restarts, and exit after about ten minutes without a network connection; ask the hub to restart them.
 
@@ -138,7 +154,8 @@ To remove the agent, ask the hub to remove the hub service, or:
 
 ```bash
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/local.claude-hub.plist
-rm ~/Library/LaunchAgents/local.claude-hub.plist ~/.local/bin/claude-hub-ensure
+rm ~/Library/LaunchAgents/local.claude-hub.plist ~/.local/bin/claude-hub
+rm -rf ~/.local/state/claude-hub
 ```
 
 ## Licence
