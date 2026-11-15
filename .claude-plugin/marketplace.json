@@ -1,16 +1,14 @@
 {
   "name": "claude-new-project",
+  "description": "Start new projects with a git repo, optional GitHub setup, and a Remote Control server you can reach from your phone",
   "owner": {
     "name": "elliotwms"
-  },
-  "metadata": {
-    "description": "Start new projects with a git repo, optional GitHub setup, and a Remote Control server you can reach from your phone"
   },
   "plugins": [
     {
       "name": "new-project",
       "source": "./",
-      "description": "Create a project, its git and GitHub repos, and a Remote Control server with worktrees for it"
+      "description": "Create projects with their git and GitHub repos and a Remote Control server each, managed from a central hub session that launchd keeps alive"
     }
   ]
 }

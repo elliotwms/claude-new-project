@@ -7,5 +7,6 @@
   "settings_from": "",
   "managed_by": "",
   "spawn": "worktree",
-  "permission_mode": "acceptEdits"
+  "permission_mode": "acceptEdits",
+  "hub_session": "hub"
 }

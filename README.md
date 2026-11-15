@@ -1,20 +1,53 @@
 # new-project
 
-A Claude Code plugin that starts a new project end to end. Ask Claude for a new project and it:
+A Claude Code plugin for running all your projects from your phone, on an always-on machine such as a Mac mini. It has two skills:
 
-1. creates the folder and scaffolds it for the stack you name;
-2. makes a git repo with an initial commit;
-3. optionally creates a GitHub repo, from a template and with settings copied from a repo you already like;
-4. starts a [Remote Control](https://code.claude.com/docs/en/remote-control) server for it in tmux, with each session in its own git worktree.
+- **`new-project`**: ask for a new project and Claude creates the folder, scaffolds it, makes a git repo, optionally creates a GitHub repo set up like one you already have, and starts a [Remote Control](https://code.claude.com/docs/en/remote-control) server for it in tmux, with each session in its own git worktree.
+- **`hub-service`**: installs a launchd agent that keeps the hub (below) running through crashes, network drops and reboots.
 
-A minute later the project shows up in your session list at claude.ai/code and in the Claude app, so you can work on it from your phone while it runs on your own machine.
+## The pattern
 
-It's built for an always-on machine, such as a Mac mini, running a Claude Code session you reach through Remote Control. Ask that session for a new project and you never need to sit at the machine.
+One Claude Code session, the **hub**, runs in your projects folder. You open it from the Claude app or claude.ai/code and ask it for new projects, or to start and stop project servers. Each project gets its own Remote Control server, and you work with each project's sessions directly. The hub sets projects up; it doesn't direct their work.
+
+```mermaid
+flowchart TB
+    you["You<br/>Claude app or claude.ai/code"]
+
+    subgraph machine["Your machine"]
+        launchd["launchd agent<br/>(hub-service)"]
+        hub["<b>Hub</b><br/>tmux: hub · ~/projects<br/>remote-control --spawn same-dir"]
+
+        subgraph foo["Project server: foo"]
+            fooServer["tmux: foo · ~/projects/foo<br/>remote-control --spawn worktree"]
+            foo1["session 1<br/>worktree a"]
+            foo2["session 2<br/>worktree b"]
+            fooServer --- foo1
+            fooServer --- foo2
+        end
+
+        subgraph bar["Project server: bar"]
+            barServer["tmux: bar · ~/projects/bar"]
+        end
+    end
+
+    you -->|Remote Control| hub
+    you -->|Remote Control| fooServer
+    you -->|Remote Control| barServer
+    launchd -.->|restarts if it stops| hub
+    hub -->|creates, starts, stops| fooServer
+    hub -->|creates, starts, stops| barServer
+
+    classDef hubStyle fill:#e8e4f8,stroke:#5b4fc7,color:#17151f
+    class hub hubStyle
+```
+
+A new project shows up in your session list about a minute after you ask for it.
 
 ## Requirements
 
 - [Claude Code](https://code.claude.com) signed in with a claude.ai plan that includes Remote Control (Pro, Max, Team or Enterprise; API keys don't work)
 - `git` and `tmux`
+- macOS for the `hub-service` skill (`new-project` works anywhere)
 - [`gh`](https://cli.github.com), logged in with `gh auth login`, if you want GitHub repos
 - For iOS projects: Xcode, and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 
@@ -29,9 +62,25 @@ In Claude Code:
 
 Update later with `/plugin marketplace update claude-new-project`.
 
+## Set up the hub
+
+Start a session in your projects folder, then ask it to keep itself alive:
+
+```bash
+cd ~/projects && claude --rc "hub"
+```
+
+> Set up the hub service.
+
+The `hub-service` skill installs a launchd agent (`local.claude-hub`) that checks every minute whether the hub's tmux session is running and starts it if not. Once it's installed you can close that first session: the agent starts the hub in tmux, and from then on you reach it from the Claude app.
+
+For the hub to come back after a reboot, the machine needs automatic login (not available with FileVault on), because launchd agents start at login. The skill checks this and sleep settings, and tells you what to change.
+
+The `hub-service` skill is macOS only. On Linux, the same start script works from a systemd user timer.
+
 ## Use
 
-Ask in plain words, for example:
+Open the hub and ask in plain words, for example:
 
 > New project called `tide-times`: an iOS app showing tide times for the Welsh coast. Put it on GitHub.
 
@@ -52,6 +101,7 @@ Copy `config.example.json` to `~/.config/new-project/config.json` and edit it. E
 | `managed_by` | none | `owner/repo` of the Terraform (or similar) repo that manages your GitHub repos |
 | `spawn` | `worktree` | Remote Control spawn mode: `worktree` or `same-dir` |
 | `permission_mode` | `acceptEdits` | Starting permission mode for remote sessions |
+| `hub_session` | `hub` | tmux session name for the hub; no project can use it |
 
 ### Keeping repos consistent
 
@@ -67,13 +117,21 @@ If you manage GitHub repos with Terraform, set `managed_by` instead. The skill t
 
 ## Managing servers
 
-Each project's server runs in a tmux session named after the project.
+The hub and each project's server run in tmux sessions: `hub`, and one named after each project.
 
 - `tmux ls` lists them
 - `tmux attach -t <name>` shows one (detach with Ctrl-b, then d)
-- `tmux kill-session -t <name>` stops one
+- `tmux kill-session -t <name>` stops one; the launchd agent restarts the hub within a minute
+- `tail ~/Library/Logs/claude-hub.log` shows when the agent last started the hub
 
-Servers stop if the machine restarts, and a server exits after about ten minutes without a network connection. Ask Claude to restart one, or rerun the command from the skill.
+The agent only looks after the hub. Project servers stop if the machine restarts, and exit after about ten minutes without a network connection; ask the hub to restart them.
+
+To remove the agent, ask the hub to remove the hub service, or:
+
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/local.claude-hub.plist
+rm ~/Library/LaunchAgents/local.claude-hub.plist ~/.local/bin/claude-hub-ensure
+```
 
 ## Licence
 

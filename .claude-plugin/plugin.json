@@ -1,11 +1,19 @@
 {
   "name": "new-project",
-  "description": "Create a project, its git and GitHub repos, and a Remote Control server with worktrees for it",
-  "version": "0.1.0",
+  "description": "Create projects with their git and GitHub repos and a Remote Control server each, managed from a central hub session that launchd keeps alive",
+  "version": "0.2.0",
   "author": {
     "name": "elliotwms"
   },
   "repository": "https://github.com/elliotwms/claude-new-project",
   "license": "MIT",
-  "keywords": ["project", "scaffold", "github", "remote-control", "worktree", "tmux"]
+  "keywords": [
+    "project",
+    "scaffold",
+    "github",
+    "remote-control",
+    "worktree",
+    "tmux",
+    "launchd"
+  ]
 }

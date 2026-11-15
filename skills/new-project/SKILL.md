@@ -9,6 +9,31 @@ Creates a project folder, scaffolds it, commits it, optionally creates a GitHub 
 
 Nothing about any one user's setup is hard-coded here. Personal choices live in a config file (below).
 
+## The pattern
+
+This skill is usually run by the **hub**: a Claude Code Remote Control server in `projects_dir`, in its own tmux session (`hub_session`, default `hub`). The user opens the hub from their phone or browser to create projects and to start or stop project servers. Each project gets its own Remote Control server in a tmux session named after the project, and each session the user opens there gets its own git worktree. The hub doesn't direct project work; the user talks to each project's sessions directly. The `hub-service` skill keeps the hub running across crashes and reboots.
+
+```
+               You: Claude app or claude.ai/code
+                 │                         │
+                 │ Remote Control          │ Remote Control
+                 ▼                         ▼
+ ┌──────────────────────────┐        ┌───────────────────────────────┐
+ │ Hub                      │creates,│ Project server: foo           │
+ │ tmux "hub"               │starts, │ tmux "foo"                    │
+ │ cwd: ~/projects          ├───────▶│ cwd: ~/projects/foo           │
+ │ remote-control           │ stops  │ remote-control                │
+ │   --spawn same-dir       │        │   --spawn worktree            │
+ │                          │        │   ├─ session 1 → worktree a   │
+ └──────────▲───────────────┘        │   └─ session 2 → worktree b   │
+            │ restarts if it dies    └───────────────────────────────┘
+ ┌──────────┴───────────────┐        ┌───────────────────────────────┐
+ │ launchd (hub-service)    │        │ Project server: bar  …        │
+ └──────────────────────────┘        └───────────────────────────────┘
+```
+
+When this skill runs inside the hub, never stop or restart the hub's own tmux session: the skill is running inside it.
+
 ## Config
 
 Read `~/.config/new-project/config.json` if it exists. Every key is optional:
@@ -23,7 +48,8 @@ Read `~/.config/new-project/config.json` if it exists. Every key is optional:
   "settings_from": "",
   "managed_by": "",
   "spawn": "worktree",
-  "permission_mode": "acceptEdits"
+  "permission_mode": "acceptEdits",
+  "hub_session": "hub"
 }
 ```
 
@@ -34,7 +60,8 @@ Read `~/.config/new-project/config.json` if it exists. Every key is optional:
 - `template_repo`: `owner/repo` of a GitHub template repo to create new repos from. Its files replace the scaffold's shared files (workflows, issue templates, etc.).
 - `settings_from`: `owner/repo` of a reference repo whose GitHub settings, rulesets and labels new repos copy. Templates copy files, never settings, so this is how settings are kept consistent.
 - `managed_by`: `owner/repo` of an infrastructure-as-code repo (Terraform or similar) that manages the user's GitHub repos. When set, the skill doesn't create or configure the GitHub repo itself; it opens a PR there instead (step 4b).
-- `spawn`, `permission_mode`: passed to `claude remote-control`.
+- `spawn`, `permission_mode`: passed to `claude remote-control` for project servers.
+- `hub_session`: tmux session name of the hub. Default `hub`. No project may use this name.
 
 If the file doesn't exist, use the defaults and mention once in the report that the user can create it to set these.
 
@@ -48,7 +75,7 @@ If any of these are missing, ask for all of them in one short question before st
 
 ## Steps
 
-1. **Check the name is free.** If `<projects_dir>/<name>` exists, or `tmux has-session -t <name>` succeeds, stop and ask whether to reuse it or pick another name. If GitHub is wanted, also run `gh repo view <owner>/<name>`; if it exists, stop and ask.
+1. **Check the name is free.** If the name equals `hub_session`, ask for another. If `<projects_dir>/<name>` exists, or `tmux has-session -t <name>` succeeds, stop and ask whether to reuse it or pick another name. If GitHub is wanted, also run `gh repo view <owner>/<name>`; if it exists, stop and ask.
 
 2. **Check prerequisites.** `tmux` and `claude` must be on PATH. If GitHub is wanted, `gh auth status` must succeed; if it doesn't, carry on without GitHub and say in the report that `gh auth login` fixes it. For an iOS project, `xcodebuild -version` must succeed; if it doesn't, stop and say Xcode is needed.
 
