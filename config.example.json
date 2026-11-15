@@ -1,0 +1,11 @@
+{
+  "projects_dir": "~/projects",
+  "github": "ask",
+  "github_owner": "",
+  "visibility": "private",
+  "template_repo": "",
+  "settings_from": "",
+  "managed_by": "",
+  "spawn": "worktree",
+  "permission_mode": "acceptEdits"
+}

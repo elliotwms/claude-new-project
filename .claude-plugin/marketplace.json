@@ -1,0 +1,16 @@
+{
+  "name": "claude-new-project",
+  "owner": {
+    "name": "elliotwms"
+  },
+  "metadata": {
+    "description": "Start new projects with a git repo, optional GitHub setup, and a Remote Control server you can reach from your phone"
+  },
+  "plugins": [
+    {
+      "name": "new-project",
+      "source": "./",
+      "description": "Create a project, its git and GitHub repos, and a Remote Control server with worktrees for it"
+    }
+  ]
+}

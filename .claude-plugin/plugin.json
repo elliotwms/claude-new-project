@@ -1,0 +1,11 @@
+{
+  "name": "new-project",
+  "description": "Create a project, its git and GitHub repos, and a Remote Control server with worktrees for it",
+  "version": "0.1.0",
+  "author": {
+    "name": "elliotwms"
+  },
+  "repository": "https://github.com/elliotwms/claude-new-project",
+  "license": "MIT",
+  "keywords": ["project", "scaffold", "github", "remote-control", "worktree", "tmux"]
+}
